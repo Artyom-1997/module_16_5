@@ -1,0 +1,94 @@
+# Установка необходимых пакетов
+# pip install fastapi uvicorn jinja2
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from typing import List
+
+app = FastAPI()
+
+# Создание объекта Jinja2Templates
+templates = Jinja2Templates(directory="templates")
+
+# Изначальный пустой список пользователей
+users: List[User] = []
+
+# Модель пользователя
+class User(BaseModel):
+    id: int
+    username: str
+    age: int
+
+# Изначально создаем несколько пользователей
+initial_users = [
+    User(id=1, username="UrbanUser", age=24),
+    User(id=2, username="UrbanTest", age=22),
+    User(id=3, username="Capybara", age=60),
+]
+
+# Заполняем список пользователей
+users.extend(initial_users)
+
+@app.get("/", response_class=HTMLResponse)
+async def read_users(request: Request):
+    """Возвращает список пользователей в шаблоне."""
+    return templates.TemplateResponse("users.html", {"request": request, "users": users})
+
+@app.get("/user/{user_id}", response_class=HTMLResponse)
+async def get_user(request: Request, user_id: int):
+    """Возвращает информацию о пользователе в шаблоне."""
+    for user in users:
+        if user.id == user_id:
+            return templates.TemplateResponse("users.html", {"request": request, "user": user})
+    raise HTTPException(status_code=404, detail="User was not found")
+
+@app.post("/user/{username}/{age}", response_model=User)
+async def create_user(username: str, age: int):
+    """Добавляет нового пользователя в список."""
+    new_user_id = (users[-1].id + 1) if users else 1
+    new_user = User(id=new_user_id, username=username, age=age)
+    users.append(new_user)
+    return new_user
+
+@app.put("/user/{user_id}/{username}/{age}", response_model=User)
+async def update_user(user_id: int, username: str, age: int):
+    """Обновляет существующего пользователя по указанному ID."""
+    for user in users:
+        if user.id == user_id:
+            user.username = username
+            user.age = age
+            return user
+    raise HTTPException(status_code=404, detail="User was not found")
+
+@app.delete("/user/{user_id}", response_model=User)
+async def delete_user(user_id: int):
+    """Удаляет пользователя по указанному ID."""
+    for user in users:
+        if user.id == user_id:
+            users.remove(user)
+            return user
+    raise HTTPException(status_code=404, detail="User was not found")
+
+# Запуск приложения
+# uvicorn main:app --reload
+
+#HTML шаблон
+
+<!-- users.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Список пользователей</title>
+</head>
+<body>
+    <h1>Список пользователей</h1>
+    <ul>
+        {% for user in users %}
+            <li><a href="/user/{{ user.id }}">{{ user.username }}</a> ({{ user.age }})</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
